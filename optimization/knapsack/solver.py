@@ -1,0 +1,223 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import operator
+import time
+import sys
+
+
+#============================================
+# proces as a binary tree with each edge for taken or 
+# not taken of the 'from'/'parent' node
+max_found_value = 0
+max_found_value_path = ""
+
+def visit_node (endtime, depth, weights, values, capacity, accu_value, estimated_value, path):
+  global max_found_value
+  global max_found_value_path
+
+  at_leaf = depth==0
+  if capacity<0: return        # prune this tree now
+#  if at_leaf and time.clock()>endtime: return # ran out of time, though only check at leaves
+
+  #print "At node %s with capacity %d, accu value %d and est value %d" % (path, capacity, accu_value, estimated_value)
+
+  if at_leaf and accu_value>max_found_value:
+    max_found_value = accu_value
+    max_found_value_path = path
+    #print " **new max " + str(accu_value)
+
+   
+  if estimated_value < max_found_value:
+    #print " ** pruning due to estmated value less than current known max"
+    return
+
+  if at_leaf: return  # don't look for any more nodes
+
+
+  # take the "left" edge including this node if there would be enough capacity
+  new_capacity = capacity - weights[0]
+  if new_capacity>0:
+    visit_node (endtime, depth-1, weights[1:], values[1:], new_capacity, accu_value+values[0], estimated_value, path+"1")
+
+  # take the "right" edge, excluding this node
+  # revise optimal estimated value first to decide if it's worth it
+  revised_estimate = accu_value + optimal_estimate (depth-1, weights[1:], values[1:], capacity)
+  #print "revised estimate %d" % revised_estimate
+  if revised_estimate > max_found_value:
+    visit_node (endtime, depth-1, weights[1:], values[1:], capacity, accu_value, revised_estimate, path+"0")
+
+ 
+#==========================================================
+
+def optimal_estimate (depth, weights, values, capacity):
+  ratios = [0] * depth
+
+  for pos in range(depth):
+    ratios[pos] =  (pos,float(values[pos])/weights[pos])
+
+  ratios_s = sorted(ratios, key=operator.itemgetter(1), reverse=True)
+
+  cur_wt = 0
+  cur_vl = 0.0
+
+  for ratio in ratios_s:
+    w = cur_wt + weights[ratio[0]]
+    if w>capacity:
+      r = float(capacity-cur_wt) / weights[ratio[0]]
+      cur_vl += r * values[ratio[0]]
+      cur_wt += r * weights[ratio[0]]
+      break
+    else: 
+      cur_wt = w
+      cur_vl += values[ratio[0]]
+
+  return cur_vl
+
+#===========================================================
+
+def branch_bound (endtime, weights, values, capacity):
+  depth = len(weights)
+  final_path = []
+
+  # find absolute max value
+
+  max_poss_value = reduce(operator.add, values, 0)
+  cur_val = optimal_estimate (depth, weights, values, capacity)
+  max_optimal_value = int(cur_val)
+  #print "Depth %d, Max Value %d" % (depth, max_optimal_value) 
+
+  visit_node (endtime, depth, weights, values, capacity, 0, max_optimal_value, "")
+
+  global max_found_value
+  global max_found_value_path
+
+  for c in list(max_found_value_path):
+    final_path.append(c)
+
+  return (max_found_value, final_path)
+
+#============================================
+
+def print2dtable(table):
+  fstr = "%4d "
+  s = ""
+  width = 1+len(table[0])
+  for col in range(width):
+    if col==0:
+      s += "     "
+    else:
+      s += fstr % (col-1)
+    if col==0 : s += " | "
+  print s
+
+  pad = 6 * width
+  print "".join ("-" for i in range(pad))
+
+  for row in range(len(table)):
+    s = (fstr + " | ")  % row
+    for col in range(len(table[0])):
+      s += fstr % table[row][col]
+    print s
+
+#=============================================
+
+def getO (table, k, j, w, v):
+  if j==0: return 0
+  elif w <= k: return max (table[k][j-1], v+table[k-w][j-1])
+  else: return table[k][j-1]
+ 
+
+#=============================================
+
+def dp (weights, values, capacity):
+  #print "Dynamic Programming"
+  table = []
+  for row in range(1+capacity): table.append([])
+
+  for col in range(1+len(weights)):
+    for row in range(1+capacity):
+      wt = 0
+      vl = 0
+      if col>0:
+        wt = weights[col-1]
+        vl = values[col-1]
+
+      cell_value = getO (table, row, col, wt, vl)
+      table[row].append(cell_value)
+
+  #print2dtable(table)
+
+  # traceback to find out which items to select
+  # start at the bottom right and go left and up
+  cell_row = len(table)-1
+  cell_col = len(table[0])-1
+  max_value = table[cell_row][cell_col]
+  taken = [0] * cell_col
+
+  for col in range (cell_col, 0, -1):
+    #print "looking at item " + str(col) 
+    if table[cell_row][col-1]==table[cell_row][col]:
+      #print "NOT taking"
+      taken[col-1] = 0
+    else:
+      #print "taking"
+      taken[col-1] = 1
+      cell_row -= (weights[col-1])
+
+  #print "%d 0" % max_value
+  #print taken
+
+  return (max_value, taken)
+
+#=============================================
+
+def solveIt(inputData):
+    # Modify this code to run your optimization algorithm
+    # parse the input
+    lines = inputData.split('\n')
+    firstLine = lines[0].split()
+    items = int(firstLine[0])
+    capacity = int(firstLine[1])
+    values = []
+    weights = []
+
+    for i in range(1, items+1):
+        line = lines[i]
+        parts = line.split()
+        values.append(int(parts[0]))
+        weights.append(int(parts[1]))
+
+#    items = len(values)
+
+#    start = time.clock()
+#    (value, taken) = dp (weights, values, capacity)
+#    end = time.clock()
+#    print "DP version took %f" % (end-start)
+#    outputData = str(value) + ' ' + str(0) + '\n'
+#    outputData += ' '.join(map(str, taken))
+#    print outputData
+
+# walk around the items-depth tree
+    start = time.clock()
+    sys.setrecursionlimit(items+50)
+    endtime = start + (60 * 15)   # have a fifteen minute max runtime
+    (value, taken) = branch_bound (endtime, weights, values, capacity)
+#    end = time.clock()
+#    print "BB version took %f" % (end-start)
+
+    # prepare the solution in the specified output format
+    outputData = str(value) + ' ' + str(0) + '\n'
+    outputData += ' '.join(map(str, taken))
+    return outputData
+
+import sys
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        fileLocation = sys.argv[1].strip()
+        inputDataFile = open(fileLocation, 'r')
+        inputData = ''.join(inputDataFile.readlines())
+        inputDataFile.close()
+        print solveIt(inputData)
+    else:
+        print 'This test requires an input file.  Please select one from the data directory. (i.e. python solver.py ./data/ks_4_0)'

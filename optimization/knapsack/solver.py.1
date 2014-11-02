@@ -1,0 +1,98 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+from operator import itemgetter
+import sys
+
+max_val = 0
+max_val_rep = ""
+
+def visit (l, w, fact, accu, accu_v, rep, capacity):
+  if len(l)==0: return
+  node_weight = w[0]*fact
+  accu_weight = accu + node_weight
+  accu_value = accu_v + l[0]*fact
+
+  # this is the prune check
+  if (accu_weight>capacity): return
+  
+  #print str(node_weight) + " <- '" + rep + "' accu_w = " + str(accu_weight) + " accu_v=" + str(accu_value)
+  global max_val
+  global max_val_rep
+  #only allowed to to do max check at the end leaf nodes
+  if len(l)==1 and accu_value>max_val:
+    max_val = accu_value
+    max_val_rep = rep 
+
+  if len(l)>1:
+    for inc in [1,0]:
+      visit(l[1:], w[1:], inc, accu_weight, accu_value, rep+str(inc), capacity)
+ 
+
+def solveIt(inputData):
+    # Modify this code to run your optimization algorithm
+
+    # parse the input
+    lines = inputData.split('\n')
+
+    firstLine = lines[0].split()
+    items = int(firstLine[0])
+    capacity = int(firstLine[1])
+
+    values = []
+    weights = []
+    ratios = []
+
+    for i in range(1, items+1):
+      line = lines[i]
+      parts = line.split()
+      values.append(int(parts[0]))
+      weights.append(int(parts[1]))      
+      ratio = ( float(parts[0]) / float(parts[1]))      
+      ratios.append((i-1,ratio))
+            
+    sorted_ratios = sorted(ratios, key=itemgetter(1), reverse=True)
+#    print sorted_ratios
+    
+    max_value = 0.0
+    current_capacity = capacity
+    for item,ratio in sorted_ratios:
+#      print "Current capacity %d, max value %f, item %d" % (current_capacity, max_value, item)
+      if weights[item] <= current_capacity:
+        max_value += values[item]
+        current_capacity -= weights[item]
+#        print "added item " + str(item) + " of weight " + str(weights[item])
+      else:
+        if current_capacity!=0:
+          final_ratio = current_capacity / float(weights[item])
+          final_value = values[item] * final_ratio
+          max_value += final_value
+          current_capacity -= (weights[item]*final_ratio)
+#          print "added " + str(final_ratio) + " of item " + str(item)
+        else:
+          break
+        
+    #print "Target max value = %f, final capacity = %d" % (max_value, current_capacity)
+
+    visit([0]+values, [0]+weights, 0, 0, 0, "", capacity)
+    taken = []
+    #print max_val_rep
+    for c in max_val_rep: taken.append(c)    
+
+    # prepare the solution in the specified output format
+    outputData = str(max_val) + ' ' + str(0) + '\n'
+    outputData += ' '.join(map(str, taken))
+    return outputData
+
+
+import sys
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        fileLocation = sys.argv[1].strip()
+        inputDataFile = open(fileLocation, 'r')
+        inputData = ''.join(inputDataFile.readlines())
+        inputDataFile.close()
+        print solveIt(inputData)
+    else:
+        print 'This test requires an input file.  Please select one from the data directory. (i.e. python solver.py ./data/ks_4_0)'
+
